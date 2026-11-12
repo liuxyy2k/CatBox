@@ -80,23 +80,38 @@ struct PosterSkeletonGrid: View {
     var body: some View {
         // 不要在骨架上叠毛玻璃，也不要 .redacted。
         // 加载源时这一屏会整块出现，材质采样 + 红占位在 iOS 上会直接闪退。
-        LazyVGrid(columns: Theme.columns(columns), spacing: Theme.spacingM) {
-            ForEach(0..<(max(1, columns) * max(1, rows)), id: \.self) { _ in
-                VStack(alignment: .leading, spacing: 7) {
-                    RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                        .aspectRatio(aspect, contentMode: .fit)
-                    if aspect < 1 {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(height: 10)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.primary.opacity(0.05))
-                            .frame(width: 48, height: 10)
+        // 也别用 LazyVGrid 套在 ScrollView 里：和真海报墙同时出现时会叠两层 lazy 布局，真机容易直接闪退。
+        let cols = max(1, min(8, columns))
+        let total = cols * max(1, rows)
+        VStack(spacing: Theme.spacingM) {
+            ForEach(0..<max(1, rows), id: \.self) { row in
+                HStack(spacing: Theme.spacingM) {
+                    ForEach(0..<cols, id: \.self) { col in
+                        let index = row * cols + col
+                        if index < total {
+                            skeletonCell
+                        }
                     }
                 }
             }
         }
         .padding(.horizontal, Theme.padding)
+    }
+
+    private var skeletonCell: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.08))
+                .aspectRatio(aspect, contentMode: .fit)
+            if aspect < 1 {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 10)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.primary.opacity(0.05))
+                    .frame(width: 48, height: 10)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

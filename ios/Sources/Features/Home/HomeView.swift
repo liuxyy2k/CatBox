@@ -180,12 +180,17 @@ struct HomeView: View {
             .disabled(coordinator.sites.isEmpty)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                reloadCategory()
-            } label: {
-                Image(systemName: "arrow.clockwise")
+            HStack(spacing: 10) {
+                if siteId != nil, !coordinator.sites.isEmpty {
+                    PosterLayoutSwitch(landscape: posterLandscapeBinding)
+                }
+                Button {
+                    reloadCategory()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(loading || siteId == nil)
             }
-            .disabled(loading || siteId == nil)
         }
     }
 
@@ -205,26 +210,21 @@ struct HomeView: View {
     }
 
     private var categoryChips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.spacingS) {
-                    ForEach(categories) { category in
-                        Button {
-                            guard category.id != tid else { return }
-                            tid = category.id
-                            selected = [:]
-                            reloadCategory()
-                        } label: {
-                            ChipLabel(text: category.name, selected: category.id == tid, large: true, glass: true)
-                        }
-                        .buttonStyle(.plain)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.spacingS) {
+                ForEach(categories) { category in
+                    Button {
+                        guard category.id != tid else { return }
+                        tid = category.id
+                        selected = [:]
+                        reloadCategory()
+                    } label: {
+                        ChipLabel(text: category.name, selected: category.id == tid, large: true, glass: true)
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, Theme.padding)
             }
-            PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                .padding(.horizontal, Theme.padding)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, Theme.padding)
         }
     }
 
@@ -313,6 +313,7 @@ struct HomeView: View {
                 }
             }
         }
+        .id("\(siteId ?? "")-\(posterLandscape)-\(columnCount)")
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
     }
@@ -371,6 +372,10 @@ struct HomeView: View {
             // 换站点：旧列表和旧的筛选项都要清掉（不然会把上个站点的筛选条件发给新站点）
             items = []
             selected = [:]
+            // 分类条也先收起来：若和骨架/海报墙同时建，横向滚动 + 网格会在真机上把布局递归撑爆（闪退）
+            categories = []
+            categoryFilters = [:]
+            tid = nil
         }
         loadTask = Task { await loadSiteBody(token: token, keepItems: keepItems) }
         scheduleSlowHint(token: token)

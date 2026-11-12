@@ -60,6 +60,11 @@ struct BrowseView: View {
         .background(Theme.canvas.ignoresSafeArea())
         .navigationTitle(title ?? site.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                PosterLayoutSwitch(landscape: posterLandscapeBinding)
+            }
+        }
         .navigationDestination(for: VodItem.self) { item in
             DetailView(item: item, client: client)
         }
@@ -112,26 +117,21 @@ struct BrowseView: View {
     }
 
     private var categoryRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.spacingS) {
-                    ForEach(categories) { category in
-                        Button {
-                            guard category.id != tid else { return }
-                            tid = category.id
-                            selected = [:]
-                            Task { await reload() }
-                        } label: {
-                            ChipLabel(text: category.name, selected: category.id == tid, compact: true, glass: true)
-                        }
-                        .buttonStyle(.plain)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.spacingS) {
+                ForEach(categories) { category in
+                    Button {
+                        guard category.id != tid else { return }
+                        tid = category.id
+                        selected = [:]
+                        Task { await reload() }
+                    } label: {
+                        ChipLabel(text: category.name, selected: category.id == tid, compact: true, glass: true)
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, Theme.padding)
             }
-            PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                .padding(.horizontal, Theme.padding)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, Theme.padding)
         }
     }
 
@@ -170,6 +170,7 @@ struct BrowseView: View {
                 posterLink(slot)
             }
         }
+        .id("\(site.id)-\(tid ?? "")-\(posterLandscape)-\(columnCount)")
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
     }

@@ -103,6 +103,8 @@ struct PosterCard: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
+        .aspectRatio(Theme.posterLandscapeAspect, contentMode: .fit)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous))
         .overlay { posterStroke }
     }
