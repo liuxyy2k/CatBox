@@ -274,13 +274,20 @@ final class NodeClient {
     // MARK: - 解析辅助
 
     private static func parseCategories(_ payload: [String: Any]) -> [Category] {
-        payload.dictArray("class").compactMap { raw -> Category? in
-            guard let id = raw.str("type_id"), let name = raw.str("type_name") else { return nil }
-            return Category(id: id, name: name)
+        // 同一个 type_id 出现两次时，ForEach 会直接闪退（SwiftUI 要求 id 唯一）
+        var seen = Set<String>()
+        var result: [Category] = []
+        for raw in payload.dictArray("class") {
+            guard let id = raw.str("type_id"), let name = raw.str("type_name") else { continue }
+            guard seen.insert(id).inserted else { continue }
+            result.append(Category(id: id, name: name))
         }
+        return result
     }
 
     private static func parseItems(_ payload: [String: Any], site: SiteInfo) -> [VodItem] {
+        // vod_id 保持原样（详情和播放都靠它）。列表里重复 id 的去重放在界面 ForEach，
+        // 这里改 id 会让点进去的详情请求打到错误的片子。
         payload.dictArray("list").compactMap { raw in
             guard var item = VodItem(json: raw, siteKey: site.key, sourceId: site.sourceId) else { return nil }
             item.pic = normalizePic(item.pic, base: base(forSource: site.sourceId))
@@ -312,16 +319,20 @@ final class NodeClient {
         for (tid, value) in raw {
             let groups = (value as? [Any])?.compactMap { $0 as? [String: Any] } ?? []
             var parsed: [FilterGroup] = []
+            var seenKeys = Set<String>()
             for group in groups {
                 let key = group.str("key") ?? ""
                 let name = group.str("name") ?? key
+                var seenOptions = Set<String>()
                 let options = group.dictArray("value").compactMap { option -> FilterOption? in
                     let optionName = option.str("n") ?? option.str("name") ?? ""
                     let optionValue = option.str("v") ?? option.str("value") ?? ""
                     guard !optionName.isEmpty else { return nil }
+                    let token = optionName + "\u{1f}" + optionValue
+                    guard seenOptions.insert(token).inserted else { return nil }
                     return FilterOption(name: optionName, value: optionValue)
                 }
-                guard !key.isEmpty, !options.isEmpty else { continue }
+                guard !key.isEmpty, !options.isEmpty, seenKeys.insert(key).inserted else { continue }
                 parsed.append(FilterGroup(id: key, name: name, options: options))
             }
             if !parsed.isEmpty { result[tid] = parsed }

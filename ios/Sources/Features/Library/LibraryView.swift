@@ -59,10 +59,10 @@ struct LibraryView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: Theme.posterColumns(library.settings.gridColumns, wide: isWideLayout),
-                          spacing: Theme.spacingM) {
+                          spacing: Theme.spacingL) {
                     ForEach(library.favorites) { record in
                         NavigationLink(value: record.item.asVodItem) {
-                            PosterCard(item: record.item.asVodItem)
+                            PosterCard(item: record.item.asVodItem, showRemarks: true, titleFont: .footnote)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {

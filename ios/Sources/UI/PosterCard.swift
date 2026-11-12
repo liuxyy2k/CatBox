@@ -49,15 +49,16 @@ struct PosterCard: View {
     }
 
     private var portraitCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
             ZStack(alignment: .bottomTrailing) {
                 PosterImage(urlString: item.pic, fallbackText: item.name)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if let remarks = remarksText {
                     RemarksBadge(text: remarks)
-                        .padding(4)
+                        .padding(6)
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous))
+            .overlay { posterStroke }
             Text(item.name)
                 .font(titleFont)
                 .lineLimit(2, reservesSpace: true)
@@ -70,46 +71,43 @@ struct PosterCard: View {
                     .lineLimit(1)
             }
         }
-        .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay { glassStroke }
     }
 
     private var landscapeCard: some View {
         ZStack(alignment: .bottomLeading) {
             PosterImage(urlString: item.pic, fallbackText: item.name, aspect: Theme.posterLandscapeAspect)
+            LinearGradient(colors: [.clear, .black.opacity(0.78)],
+                           startPoint: .center, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
-                    .font(titleFont)
-                    .fontWeight(.semibold)
+                    .font(titleFont.weight(.semibold))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let remarks = remarksText {
                     Text(remarks)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.82))
                         .lineLimit(1)
                 }
                 if let caption, !caption.isEmpty {
                     Text(caption)
                         .font(.caption2)
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay { glassStroke }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous))
+        .overlay { posterStroke }
     }
 
-    private var glassStroke: some View {
-        RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+    private var posterStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
     }
 
     private var remarksText: String? {
@@ -144,5 +142,18 @@ struct VodRow: View {
             }
             Spacer(minLength: 0)
         }
+    }
+}
+
+/// 海报墙用的稳定身份。源列表里 vod_id 经常重复，直接 ForEach(items) 会闪退。
+struct VodGridSlot: Identifiable {
+    let slot: Int
+    let item: VodItem
+    var id: String { "\(slot)|\(item.sourceId)|\(item.siteKey)|\(item.id)" }
+}
+
+extension Array where Element == VodItem {
+    var gridSlots: [VodGridSlot] {
+        enumerated().map { VodGridSlot(slot: $0.offset, item: $0.element) }
     }
 }

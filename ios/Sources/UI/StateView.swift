@@ -78,23 +78,25 @@ struct PosterSkeletonGrid: View {
     var aspect: CGFloat = Theme.posterAspect
 
     var body: some View {
+        // 不要在骨架上叠毛玻璃，也不要 .redacted。
+        // 加载源时这一屏会整块出现，材质采样 + 红占位在 iOS 上会直接闪退。
         LazyVGrid(columns: Theme.columns(columns), spacing: Theme.spacingM) {
             ForEach(0..<(max(1, columns) * max(1, rows)), id: \.self) { _ in
-                VStack(alignment: .leading, spacing: 5) {
-                    RoundedRectangle(cornerRadius: Theme.posterRadius)
-                        .fill(Color.secondary.opacity(0.15))
+                VStack(alignment: .leading, spacing: 7) {
+                    RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
                         .aspectRatio(aspect, contentMode: .fit)
                     if aspect < 1 {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.15))
+                            .fill(Color.primary.opacity(0.08))
                             .frame(height: 10)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.05))
+                            .frame(width: 48, height: 10)
                     }
                 }
-                .padding(6)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             }
         }
         .padding(.horizontal, Theme.padding)
-        .redacted(reason: .placeholder)
     }
 }

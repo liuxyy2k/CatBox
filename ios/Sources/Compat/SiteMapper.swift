@@ -27,6 +27,7 @@ enum SiteMapper {
         }
 
         var sites: [SiteInfo] = []
+        var seen = Set<String>()
         for raw in video.dictArray("sites") {
             if let enabled = raw.bool("enable"), enabled == false { continue }
             guard let route = NodeRoute.route(for: raw) else { continue }
@@ -35,6 +36,8 @@ enum SiteMapper {
             var key = raw.str("key") ?? route
             if key.hasPrefix("nodejs_") { key = String(key.dropFirst(7)) }
             if key.hasPrefix("/") { key = String(key.dropFirst()) }
+            // 同一个 key 出现两次时，首页/选源列表的 ForEach 会闪退
+            guard seen.insert(key).inserted else { continue }
 
             sites.append(SiteInfo(
                 key: key,

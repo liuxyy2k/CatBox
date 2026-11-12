@@ -70,10 +70,18 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                content
-                    .padding(.top, Theme.spacingS)
+                // 分类条钉在滚动区顶部，不要放进 safeAreaInset。
+                // 加载源时分类从无到有，安全区里再套一层横向滚动，会把布局引擎打崩。
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        content
+                            .padding(.top, Theme.spacingS)
+                    } header: {
+                        if showsCategoryBar { categoryBar }
+                    }
+                }
             }
-            .safeAreaInset(edge: .top, spacing: 0) { categoryBar }
+            .background(Theme.canvas.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: VodItem.self) { item in
@@ -94,6 +102,10 @@ struct HomeView: View {
                 handleSitesChanged()
             }
         }
+    }
+
+    private var showsCategoryBar: Bool {
+        !categories.isEmpty || !currentFilters.isEmpty
     }
 
     /// 站点按"来自哪个源"分组（多源同时跑时，源列表就是这个并集）
@@ -179,39 +191,40 @@ struct HomeView: View {
 
     // MARK: - 第一排：源的分类（钉在顶部，毛玻璃底）
 
-    @ViewBuilder
     private var categoryBar: some View {
-        if categories.isEmpty && currentFilters.isEmpty {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: Theme.spacingS) {
-                if !categories.isEmpty { categoryChips }
-                if !currentFilters.isEmpty { filterRows }
-                PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, Theme.padding)
-            }
-            .padding(.vertical, Theme.spacingS)
-            .background(.ultraThinMaterial)
+        VStack(alignment: .leading, spacing: Theme.spacingS) {
+            if !categories.isEmpty { categoryChips }
+            if !currentFilters.isEmpty { filterRows }
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.canvas)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
     }
 
     private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.spacingS) {
-                ForEach(categories) { category in
-                    Button {
-                        guard category.id != tid else { return }
-                        tid = category.id
-                        selected = [:]
-                        reloadCategory()
-                    } label: {
-                        ChipLabel(text: category.name, selected: category.id == tid, large: true, glass: true)
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Theme.spacingS) {
+                    ForEach(categories) { category in
+                        Button {
+                            guard category.id != tid else { return }
+                            tid = category.id
+                            selected = [:]
+                            reloadCategory()
+                        } label: {
+                            ChipLabel(text: category.name, selected: category.id == tid, large: true, glass: true)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.leading, Theme.padding)
             }
-            .padding(.horizontal, Theme.padding)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            PosterLayoutSwitch(landscape: posterLandscapeBinding)
+                .padding(.trailing, Theme.padding)
         }
     }
 
@@ -277,11 +290,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6)
-        }
+        .background(Theme.cardFill, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         .padding(.horizontal, Theme.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -293,20 +302,20 @@ struct HomeView: View {
     }
 
     private var grid: some View {
-        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingM) {
-            ForEach(items) { item in
-                NavigationLink(value: item) {
-                    PosterCard(item: item, showRemarks: true, titleFont: .footnote, landscape: posterLandscape)
+        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingL) {
+            ForEach(items.gridSlots) { slot in
+                NavigationLink(value: slot.item) {
+                    PosterCard(item: slot.item, showRemarks: true, titleFont: .footnote, landscape: posterLandscape)
                 }
                 .buttonStyle(.plain)
                 .onAppear {
-                    if item.id == items.last?.id { Task { await loadMore() } }
+                    if slot.slot == items.count - 1 { Task { await loadMore() } }
                 }
             }
         }
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
-        .animation(.snappy(duration: 0.28), value: posterLandscape)
+        .id(posterLandscape)
     }
 
     // MARK: - 取数
@@ -408,11 +417,17 @@ struct HomeView: View {
                 siteMenus[site.id] = SiteMenus(categories: home.categories, filters: home.filters)
                 CatyLog.shared.info("site", "\(site.name)：\(home.categories.count) 个分类（已缓存）")
             }
-            tid = categories.first?.id
+            let kept = tid
+            if keepItems, let kept, categories.contains(where: { $0.id == kept }) {
+                tid = kept
+            } else {
+                tid = categories.first?.id
+                selected = [:]
+            }
             page = 1
             pageCount = 1
-            if let first = tid {
-                let result = try await client.category(site: site, tid: first, page: 1)
+            if let tid {
+                let result = try await client.category(site: site, tid: tid, page: 1, extend: selected)
                 guard token == loadToken else { return }
                 items = result.items
                 page = result.page
@@ -420,7 +435,9 @@ struct HomeView: View {
             } else {
                 items = []
             }
-            if items.isEmpty { errorText = "这个站点没有返回内容" }
+            if items.isEmpty, !(categories.isEmpty && site.searchable) {
+                errorText = "这个站点没有返回内容"
+            }
         } catch {
             guard token == loadToken else { return }
             if keepItems { items = previousItems }

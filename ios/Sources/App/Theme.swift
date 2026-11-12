@@ -11,9 +11,13 @@ enum Theme {
     static let accent = Color(red: 0.36, green: 0.52, blue: 0.98)
     static let accentSoft = Color(red: 0.36, green: 0.52, blue: 0.98).opacity(0.18)
 
-    static let cardRadius: CGFloat = 12
-    static let posterRadius: CGFloat = 10
+    static let cardRadius: CGFloat = 14
+    static let posterRadius: CGFloat = 12
     static let chipRadius: CGFloat = 14
+
+    /// 页面底色。内容区用实色，毛玻璃只留给系统导航和底部标签。
+    static let canvas = Color(red: 0.03, green: 0.035, blue: 0.045)
+    static let cardFill = Color.primary.opacity(0.06)
 
     static let padding: CGFloat = 14
     static let spacingS: CGFloat = 6
@@ -62,7 +66,7 @@ struct ChipLabel: View {
             .lineLimit(1)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .foregroundStyle(selected ? Theme.accent : Color.primary)
+            .foregroundStyle(selected ? Color.white : Color.primary.opacity(0.88))
             .background { chipFill }
             .clipShape(Capsule())
             .overlay { chipStroke }
@@ -70,22 +74,19 @@ struct ChipLabel: View {
 
     @ViewBuilder
     private var chipFill: some View {
-        if glass {
-            ZStack {
-                Capsule().fill(.ultraThinMaterial)
-                if selected {
-                    Capsule().fill(Theme.accent.opacity(0.30))
-                }
-            }
+        if selected {
+            Capsule().fill(Theme.accent)
+        } else if glass {
+            Capsule().fill(Theme.cardFill)
         } else {
-            Capsule().fill(selected ? Theme.accent.opacity(0.22) : Color.secondary.opacity(0.12))
+            Capsule().fill(Color.secondary.opacity(0.12))
         }
     }
 
     @ViewBuilder
     private var chipStroke: some View {
-        if glass {
-            Capsule().strokeBorder(Color.primary.opacity(selected ? 0.16 : 0.08), lineWidth: 0.6)
+        if !selected {
+            Capsule().strokeBorder(Color.primary.opacity(glass ? 0.10 : 0.06), lineWidth: 0.5)
         }
     }
 
@@ -115,18 +116,7 @@ struct RemarksBadge: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .foregroundStyle(.white)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(.black.opacity(0.38))
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.5)
-            }
+            .background(Color.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -137,30 +127,30 @@ struct PosterLayoutSwitch: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            segment(title: "竖向", symbol: "rectangle.portrait", on: !landscape) {
+            segment(title: "竖", symbol: "rectangle.portrait", on: !landscape) {
                 landscape = false
             }
-            segment(title: "横向", symbol: "rectangle.ratio.16.to.9", on: landscape) {
+            segment(title: "横", symbol: "rectangle", on: landscape) {
                 landscape = true
             }
         }
-        .padding(3)
-        .background(Color.primary.opacity(0.06), in: Capsule())
+        .padding(2)
+        .background(Theme.cardFill, in: Capsule())
         .overlay {
-            Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6)
+            Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
         }
     }
 
     private func segment(title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: symbol)
                 Text(title)
             }
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 10)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .foregroundStyle(on ? Color.white : Color.primary.opacity(0.82))
+            .foregroundStyle(on ? Color.white : Color.primary.opacity(0.72))
             .background {
                 if on {
                     Capsule().fill(Theme.accent)
@@ -168,5 +158,6 @@ struct PosterLayoutSwitch: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title == "横" ? "横向海报" : "竖向海报")
     }
 }

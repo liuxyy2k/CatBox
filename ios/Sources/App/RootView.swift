@@ -31,6 +31,7 @@ struct RootView: View {
             SettingsView(coordinator: coordinator)
                 .tabItem { Label("设置", systemImage: "gearshape") }
         }
+        .tint(Theme.accent)
         .sheet(isPresented: Binding(
             get: { runtime.webPanelURL != nil },
             set: { if !$0 { runtime.closeWebPanel() } }

@@ -105,23 +105,11 @@ struct SearchView: View {
     private var resultSections: some View {
         ForEach(groups) { group in
             Section(header: Text(group.title)) {
-                ForEach(group.hits) { hit in
+                ForEach(Array(group.hits.enumerated()), id: \.offset) { _, hit in
                     NavigationLink(value: hit) {
-                        row(hit)
+                        VodRow(item: hit.item)
                     }
                 }
-            }
-        }
-    }
-
-    private func row(_ hit: AggregatorService.Hit) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(hit.item.name).lineLimit(2)
-            if let remarks = hit.item.remarks {
-                Text(remarks)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
         }
     }

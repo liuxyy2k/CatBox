@@ -51,55 +51,18 @@ struct BrowseView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.spacingM) {
-                if loading && items.isEmpty {
-                    PosterSkeletonGrid(columns: columnCount, rows: 2, aspect: posterAspect)
-                } else if items.isEmpty {
-                    if let errorText {
-                        Text(errorText)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, Theme.padding)
-                    } else if !loading {
-                        StateView(kind: .empty("这个分类没有内容", hint: "换一个分类试试"))
-                    }
-                } else {
-                    posterGrid
-                    if loading {
-                        HStack { Spacer(); ProgressView(); Spacer() }
-                    }
-                    if let errorText {
-                        Text(errorText)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, Theme.padding)
-                    }
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    pageBody
+                        .padding(.top, Theme.spacingS)
+                } header: {
+                    if !categories.isEmpty || !filters.isEmpty { filterBar }
                 }
             }
-            .padding(.top, Theme.spacingS)
         }
+        .background(Theme.canvas.ignoresSafeArea())
         .navigationTitle(title ?? site.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach(categories) { category in
-                        Button {
-                            guard category.id != tid else { return }
-                            tid = category.id
-                            selected = [:]
-                            Task { await reload() }
-                        } label: {
-                            Label(category.name, systemImage: category.id == tid ? "checkmark" : "circle")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                }
-                .disabled(categories.isEmpty)
-            }
-        }
-        .safeAreaInset(edge: .top) { filterBar }
         .navigationDestination(for: VodItem.self) { item in
             DetailView(item: item, client: client)
         }
@@ -109,36 +72,69 @@ struct BrowseView: View {
         .task { await loadInitial() }
     }
 
+    @ViewBuilder
+    private var pageBody: some View {
+        if loading && items.isEmpty {
+            PosterSkeletonGrid(columns: columnCount, rows: 2, aspect: posterAspect)
+        } else if items.isEmpty {
+            if let errorText {
+                Text(errorText)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, Theme.padding)
+            } else if !loading {
+                StateView(kind: .empty("这个分类没有内容", hint: "换一个分类试试"))
+            }
+        } else {
+            posterGrid
+            if loading {
+                HStack { Spacer(); ProgressView(); Spacer() }
+            }
+            if let errorText {
+                Text(errorText)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, Theme.padding)
+            }
+        }
+    }
+
     // MARK: - 顶部：分类 + 筛选项
 
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: Theme.spacingS) {
             if !categories.isEmpty { categoryRow }
             ForEach(filters) { group in filterRow(group) }
-            PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, Theme.padding)
         }
-        .padding(.vertical, Theme.spacingS)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.canvas)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+        }
     }
 
     private var categoryRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.spacingS) {
-                ForEach(categories) { category in
-                    Button {
-                        guard category.id != tid else { return }
-                        tid = category.id
-                        selected = [:]
-                        Task { await reload() }
-                    } label: {
-                        ChipLabel(text: category.name, selected: category.id == tid, compact: true, glass: true)
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Theme.spacingS) {
+                    ForEach(categories) { category in
+                        Button {
+                            guard category.id != tid else { return }
+                            tid = category.id
+                            selected = [:]
+                            Task { await reload() }
+                        } label: {
+                            ChipLabel(text: category.name, selected: category.id == tid, compact: true, glass: true)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.leading, Theme.padding)
             }
-            .padding(.horizontal, Theme.padding)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            PosterLayoutSwitch(landscape: posterLandscapeBinding)
+                .padding(.trailing, Theme.padding)
         }
     }
 
@@ -172,18 +168,19 @@ struct BrowseView: View {
     // MARK: - 海报墙
 
     private var posterGrid: some View {
-        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingM) {
-            ForEach(items) { item in
-                posterLink(item)
+        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingL) {
+            ForEach(items.gridSlots) { slot in
+                posterLink(slot)
             }
         }
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
-        .animation(.snappy(duration: 0.28), value: posterLandscape)
+        .id(posterLandscape)
     }
 
     @ViewBuilder
-    private func posterLink(_ item: VodItem) -> some View {
+    private func posterLink(_ slot: VodGridSlot) -> some View {
+        let item = slot.item
         let caption = item.isFolder ? "目录" : subtitle(for: item)
         if item.isFolder {
             NavigationLink(value: FolderTarget(site: site, tid: item.id, title: item.name)) {
@@ -198,7 +195,7 @@ struct BrowseView: View {
             }
             .buttonStyle(.plain)
             .onAppear {
-                if item.id == items.last?.id { Task { await loadMore() } }
+                if slot.slot == items.count - 1 { Task { await loadMore() } }
             }
         }
     }
