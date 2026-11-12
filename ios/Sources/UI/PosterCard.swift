@@ -21,8 +21,10 @@ struct PosterImage: View {
             .fill(Color.secondary.opacity(0.12))
             .aspectRatio(aspect, contentMode: .fit)
             .overlay {
-                // 用自己写的加载器（带 Referer/UA + 内存缓存），AsyncImage 在图床防盗链面前会白图
+                // 封面必须吃掉格子给的尺寸。不裁切的话，原图的像素宽高会把整行格子撑到几千点，列表一出来就崩。
                 RemoteImage(urlString: urlString, fallbackText: fallbackText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
             }
             .clipped()
     }
@@ -61,7 +63,7 @@ struct PosterCard: View {
             .overlay { posterStroke }
             Text(item.name)
                 .font(titleFont)
-                .lineLimit(2, reservesSpace: true)
+                .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let caption, !caption.isEmpty {

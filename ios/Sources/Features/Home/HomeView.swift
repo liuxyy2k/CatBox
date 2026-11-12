@@ -53,6 +53,8 @@ struct HomeView: View {
     @State private var loadToken = 0
     /// 载入超过 3 秒才提示"第一次打开这个站点要慢一点"
     @State private var slowHint = false
+    /// 翻页进行中。不挡住的话，列表一出现最后一格会连着把后面每一页都拉下来，直接撑崩。
+    @State private var paging = false
 
     /// 系统站点（配置中心/我的网盘/豆瓣首页这类）不作为默认站点，但保留在菜单里
     private var systemKeys: Set<String> { RuntimeCoordinator.systemSiteKeys }
@@ -70,15 +72,13 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                // 分类条钉在滚动区顶部，不要放进 safeAreaInset。
-                // 加载源时分类从无到有，安全区里再套一层横向滚动，会把布局引擎打崩。
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    Section {
-                        content
-                            .padding(.top, Theme.spacingS)
-                    } header: {
-                        if showsCategoryBar { categoryBar }
-                    }
+                // 分类条和海报放在同一个普通 VStack 里。
+                // 不要用钉住的 LazyVStack，也不要把横向滚动套进不限宽的 HStack：
+                // 源的列表一返回，这两种写法都会把布局递归撑爆，表现就是加载列表时闪退。
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsCategoryBar { categoryBar }
+                    content
+                        .padding(.top, Theme.spacingS)
                 }
             }
             .background(Theme.canvas.ignoresSafeArea())
@@ -205,7 +205,7 @@ struct HomeView: View {
     }
 
     private var categoryChips: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.spacingS) {
                     ForEach(categories) { category in
@@ -220,11 +220,11 @@ struct HomeView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.leading, Theme.padding)
+                .padding(.horizontal, Theme.padding)
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                .padding(.trailing, Theme.padding)
+                .padding(.horizontal, Theme.padding)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -315,7 +315,6 @@ struct HomeView: View {
         }
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
-        .id(posterLandscape)
     }
 
     // MARK: - 取数
@@ -429,7 +428,7 @@ struct HomeView: View {
             if let tid {
                 let result = try await client.category(site: site, tid: tid, page: 1, extend: selected)
                 guard token == loadToken else { return }
-                items = result.items
+                items = Self.capped(result.items)
                 page = result.page
                 pageCount = result.pageCount
             } else {
@@ -450,16 +449,25 @@ struct HomeView: View {
         }
     }
 
+    /// 一页最多画这么多张。有的源一页回几百条，格子和封面一起建出来会把 App 撑退。
+    private static func capped(_ items: [VodItem]) -> [VodItem] {
+        guard items.count > 60 else { return items }
+        return Array(items.prefix(60))
+    }
+
     @MainActor
     private func loadMore() async {
         guard let site = currentSite, let client = coordinator.client,
-              !loading, page < pageCount, items.count > 1 else { return }
+              !loading, !paging, page < pageCount, items.count > 1 else { return }
+        paging = true
+        defer { paging = false }
         let token = loadToken
         do {
             let result = try await client.category(site: site, tid: tid, page: page + 1, extend: selected)
             guard token == loadToken else { return }
             let existing = Set(items.map(\.id))
-            items.append(contentsOf: result.items.filter { !existing.contains($0.id) })
+            let fresh = Self.capped(result.items.filter { !existing.contains($0.id) })
+            items.append(contentsOf: fresh)
             page = result.page
             pageCount = result.pageCount
         } catch {

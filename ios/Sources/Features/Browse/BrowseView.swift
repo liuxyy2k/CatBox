@@ -51,13 +51,10 @@ struct BrowseView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    pageBody
-                        .padding(.top, Theme.spacingS)
-                } header: {
-                    if !categories.isEmpty || !filters.isEmpty { filterBar }
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                if !categories.isEmpty || !filters.isEmpty { filterBar }
+                pageBody
+                    .padding(.top, Theme.spacingS)
             }
         }
         .background(Theme.canvas.ignoresSafeArea())
@@ -115,7 +112,7 @@ struct BrowseView: View {
     }
 
     private var categoryRow: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.spacingS) {
                     ForEach(categories) { category in
@@ -130,11 +127,11 @@ struct BrowseView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.leading, Theme.padding)
+                .padding(.horizontal, Theme.padding)
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                .padding(.trailing, Theme.padding)
+                .padding(.horizontal, Theme.padding)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -175,7 +172,6 @@ struct BrowseView: View {
         }
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
-        .id(posterLandscape)
     }
 
     @ViewBuilder
@@ -229,12 +225,12 @@ struct BrowseView: View {
             }
             filters = tid.flatMap { home.filters[$0] } ?? []
             if !home.items.isEmpty && initialTid == nil {
-                items = home.items
+                items = Array(home.items.prefix(60))
             }
             if let tid {
                 let result = try await client.category(site: site, tid: tid, page: 1, extend: selected)
                 if !result.items.isEmpty || items.isEmpty {
-                    items = result.items
+                    items = Array(result.items.prefix(60))
                     page = result.page
                     pageCount = result.pageCount
                 }
@@ -254,7 +250,7 @@ struct BrowseView: View {
         errorText = nil
         do {
             let result = try await client.category(site: site, tid: tid, page: 1, extend: selected)
-            items = result.items
+            items = Array(result.items.prefix(60))
             page = result.page
             pageCount = result.pageCount
         } catch {
@@ -270,7 +266,8 @@ struct BrowseView: View {
         do {
             let result = try await client.category(site: site, tid: tid, page: page + 1, extend: selected)
             let existing = Set(items.map(\.id))
-            items.append(contentsOf: result.items.filter { !existing.contains($0.id) })
+            let fresh = result.items.filter { !existing.contains($0.id) }
+            items.append(contentsOf: fresh.prefix(60))
             page = result.page
             pageCount = result.pageCount
         } catch {
