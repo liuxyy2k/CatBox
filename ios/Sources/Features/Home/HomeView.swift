@@ -21,11 +21,6 @@ struct HomeView: View {
     private var isWideLayout: Bool { sizeClass == .regular }
     /// 和原仓库一样：列数只按「每行几个」算，横竖海报不再改列数。改列数会在列表出现时把网格拆掉重建。
     private var wideColumnCount: Int { library.settings.gridColumns + (isWideLayout ? 2 : 0) }
-    private var posterLandscape: Bool { library.settings.posterLandscape }
-    private var posterLandscapeBinding: Binding<Bool> {
-        Binding(get: { library.settings.posterLandscape },
-                set: { library.settings.posterLandscape = $0 })
-    }
 
     /// 当前选中的站点：用 SiteInfo.id（= sourceId|key）——多源同时跑时 key 可能重名
     @State private var siteId: String?
@@ -39,6 +34,9 @@ struct HomeView: View {
     @State private var loading = false
     @State private var errorText: String?
     @State private var showSourcePicker = false
+    /// 点海报后要打开的条目。不要用 NavigationLink(value:) 把整表注册进导航：
+    /// 源的 vod_id 重复时，列表一出现就会因为重复身份直接闪退。
+    @State private var openedItem: VodItem?
     /// 站点 → 它的分类/筛选项（问过一次就存下来；切回同一个站点时只发 category 请求）
     @State private var siteMenus: [String: SiteMenus] = [:]
     /// 取数任务：切站点时把上一个取消掉（"最后点的那次说了算"）
@@ -75,7 +73,7 @@ struct HomeView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: VodItem.self) { item in
+            .navigationDestination(item: $openedItem) { item in
                 DetailView(item: item, site: currentSite, client: coordinator.client)
             }
             .navigationDestination(for: FolderTarget.self) { target in
@@ -113,7 +111,7 @@ struct HomeView: View {
 
     private var filterRows: some View {
         VStack(alignment: .leading, spacing: Theme.spacingS) {
-            ForEach(currentFilters) { group in
+                ForEach(Array(currentFilters.enumerated()), id: \.offset) { _, group in
                 filterRow(group)
             }
         }
@@ -125,7 +123,7 @@ struct HomeView: View {
                 Text(group.name)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                ForEach(group.options, id: \.self) { option in
+                ForEach(Array(group.options.enumerated()), id: \.offset) { _, option in
                     filterChip(group: group, option: option)
                 }
             }
@@ -167,17 +165,12 @@ struct HomeView: View {
             .disabled(coordinator.sites.isEmpty)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 10) {
-                if siteId != nil, !coordinator.sites.isEmpty {
-                    PosterLayoutSwitch(landscape: posterLandscapeBinding)
-                }
-                Button {
-                    reloadCategory()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(loading || siteId == nil)
+            Button {
+                reloadCategory()
+            } label: {
+                Image(systemName: "arrow.clockwise")
             }
+            .disabled(loading || siteId == nil)
         }
     }
 
@@ -186,7 +179,7 @@ struct HomeView: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.spacingS) {
-                ForEach(categories) { category in
+                ForEach(Array(categories.enumerated()), id: \.offset) { _, category in
                     Button {
                         guard category.id != tid else { return }
                         tid = category.id
@@ -275,8 +268,10 @@ struct HomeView: View {
     private var grid: some View {
         LazyVGrid(columns: Theme.posterColumns(library.settings.gridColumns, wide: isWideLayout), spacing: Theme.spacingM) {
             ForEach(items.gridSlots) { slot in
-                NavigationLink(value: slot.item) {
-                    PosterCard(item: slot.item, showRemarks: true, titleFont: .footnote, landscape: posterLandscape)
+                Button {
+                    openedItem = slot.item
+                } label: {
+                    PosterCard(item: slot.item, showRemarks: true, titleFont: .footnote, landscape: false)
                 }
                 .buttonStyle(.plain)
                 .onAppear {
@@ -403,7 +398,7 @@ struct HomeView: View {
             if let tid {
                 let result = try await client.category(site: site, tid: tid, page: 1, extend: selected)
                 guard token == loadToken else { return }
-                items = Self.capped(result.items)
+                items = Self.unique(Self.capped(result.items))
                 page = result.page
                 pageCount = result.pageCount
             } else {
@@ -430,6 +425,12 @@ struct HomeView: View {
         return Array(items.prefix(60))
     }
 
+    /// 同一个 vod_id 只留一条。重复身份放进列表时，SwiftUI 会在画出格子的瞬间闪退。
+    private static func unique(_ items: [VodItem]) -> [VodItem] {
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.id).inserted }
+    }
+
     @MainActor
     private func loadMore() async {
         guard let site = currentSite, let client = coordinator.client,
@@ -441,7 +442,7 @@ struct HomeView: View {
             let result = try await client.category(site: site, tid: tid, page: page + 1, extend: selected)
             guard token == loadToken else { return }
             let existing = Set(items.map(\.id))
-            let fresh = Self.capped(result.items.filter { !existing.contains($0.id) })
+            let fresh = Self.unique(Self.capped(result.items.filter { !existing.contains($0.id) }))
             items.append(contentsOf: fresh)
             page = result.page
             pageCount = result.pageCount
@@ -488,7 +489,7 @@ private struct SourcePickerSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         LazyVGrid(columns: columns, spacing: Theme.spacingM) {
-                            ForEach(group.sites) { site in
+                            ForEach(Array(group.sites.enumerated()), id: \.offset) { _, site in
                                 Button {
                                     onPick(site)
                                     dismiss()
