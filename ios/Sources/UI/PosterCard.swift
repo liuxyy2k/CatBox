@@ -21,10 +21,7 @@ struct PosterImage: View {
             .fill(Color.secondary.opacity(0.12))
             .aspectRatio(aspect, contentMode: .fit)
             .overlay {
-                // 封面必须吃掉格子给的尺寸。不裁切的话，原图的像素宽高会把整行格子撑到几千点，列表一出来就崩。
                 RemoteImage(urlString: urlString, fallbackText: fallbackText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
             }
             .clipped()
     }
@@ -43,27 +40,20 @@ struct PosterCard: View {
     var caption: String? = nil
 
     var body: some View {
-        if landscape {
-            landscapeCard
-        } else {
-            portraitCard
-        }
-    }
-
-    private var portraitCard: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        // 横竖只用同一个卡片结构，只改图片比例。
+        // 原仓库就是这样。横版如果改成「字压在图上」的另一套布局，列表一出来会把格子高度算爆。
+        VStack(alignment: .leading, spacing: 5) {
             ZStack(alignment: .bottomTrailing) {
-                PosterImage(urlString: item.pic, fallbackText: item.name)
+                PosterImage(urlString: item.pic, fallbackText: item.name, aspect: imageAspect)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius))
                 if let remarks = remarksText {
                     RemarksBadge(text: remarks)
-                        .padding(6)
+                        .padding(4)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous))
-            .overlay { posterStroke }
             Text(item.name)
                 .font(titleFont)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let caption, !caption.isEmpty {
@@ -76,42 +66,8 @@ struct PosterCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var landscapeCard: some View {
-        ZStack(alignment: .bottomLeading) {
-            PosterImage(urlString: item.pic, fallbackText: item.name, aspect: Theme.posterLandscapeAspect)
-            LinearGradient(colors: [.clear, .black.opacity(0.78)],
-                           startPoint: .center, endPoint: .bottom)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(titleFont.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let remarks = remarksText {
-                    Text(remarks)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(1)
-                }
-                if let caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-        }
-        .aspectRatio(Theme.posterLandscapeAspect, contentMode: .fit)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous))
-        .overlay { posterStroke }
-    }
-
-    private var posterStroke: some View {
-        RoundedRectangle(cornerRadius: Theme.posterRadius, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+    private var imageAspect: CGFloat {
+        landscape ? Theme.posterLandscapeAspect : Theme.posterAspect
     }
 
     private var remarksText: String? {

@@ -19,15 +19,9 @@ struct HomeView: View {
 
     /// iPad / 横屏：海报多铺两列（同一个"每行 3 个"设置在 iPad 上不会显得稀稀拉拉）
     private var isWideLayout: Bool { sizeClass == .regular }
+    /// 和原仓库一样：列数只按「每行几个」算，横竖海报不再改列数。改列数会在列表出现时把网格拆掉重建。
+    private var wideColumnCount: Int { library.settings.gridColumns + (isWideLayout ? 2 : 0) }
     private var posterLandscape: Bool { library.settings.posterLandscape }
-    private var columnCount: Int {
-        Theme.categoryColumnCount(gridColumns: library.settings.gridColumns,
-                                   wide: isWideLayout,
-                                   landscape: posterLandscape)
-    }
-    private var posterAspect: CGFloat {
-        posterLandscape ? Theme.posterLandscapeAspect : Theme.posterAspect
-    }
     private var posterLandscapeBinding: Binding<Bool> {
         Binding(get: { library.settings.posterLandscape },
                 set: { library.settings.posterLandscape = $0 })
@@ -72,16 +66,13 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                // 分类条和海报放在同一个普通 VStack 里。
-                // 不要用钉住的 LazyVStack，也不要把横向滚动套进不限宽的 HStack：
-                // 源的列表一返回，这两种写法都会把布局递归撑爆，表现就是加载列表时闪退。
-                VStack(alignment: .leading, spacing: 0) {
-                    if showsCategoryBar { categoryBar }
+                VStack(alignment: .leading, spacing: Theme.spacingM) {
+                    if !categories.isEmpty { categoryChips }
+                    if !currentFilters.isEmpty { filterRows }
                     content
-                        .padding(.top, Theme.spacingS)
                 }
+                .padding(.top, Theme.spacingS)
             }
-            .background(Theme.canvas.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: VodItem.self) { item in
@@ -102,10 +93,6 @@ struct HomeView: View {
                 handleSitesChanged()
             }
         }
-    }
-
-    private var showsCategoryBar: Bool {
-        !categories.isEmpty || !currentFilters.isEmpty
     }
 
     /// 站点按"来自哪个源"分组（多源同时跑时，源列表就是这个并集）
@@ -156,7 +143,7 @@ struct HomeView: View {
             }
             reloadCategory()
         } label: {
-            ChipLabel(text: option.name, selected: isOn, compact: true, large: true, glass: true)
+            ChipLabel(text: option.name, selected: isOn, compact: true, large: true)
         }
         .buttonStyle(.plain)
     }
@@ -194,20 +181,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - 第一排：源的分类（钉在顶部，毛玻璃底）
-
-    private var categoryBar: some View {
-        VStack(alignment: .leading, spacing: Theme.spacingS) {
-            if !categories.isEmpty { categoryChips }
-            if !currentFilters.isEmpty { filterRows }
-        }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.canvas)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-        }
-    }
+    // MARK: - 第一排：源的分类
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -219,7 +193,7 @@ struct HomeView: View {
                         selected = [:]
                         reloadCategory()
                     } label: {
-                        ChipLabel(text: category.name, selected: category.id == tid, large: true, glass: true)
+                        ChipLabel(text: category.name, selected: category.id == tid, large: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -237,7 +211,7 @@ struct HomeView: View {
         } else if loading && items.isEmpty {
             VStack(spacing: Theme.spacingM) {
                 loadingBanner
-                PosterSkeletonGrid(columns: columnCount, aspect: posterAspect)
+                PosterSkeletonGrid(columns: wideColumnCount)
             }
         } else if isSearchOnlySite {
             // 体检确认过：这些站点（"搜索|xxx"、部分"🏠"类）本来就不返回分类列表，
@@ -288,9 +262,6 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Theme.cardFill, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         .padding(.horizontal, Theme.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -302,7 +273,7 @@ struct HomeView: View {
     }
 
     private var grid: some View {
-        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingL) {
+        LazyVGrid(columns: Theme.posterColumns(library.settings.gridColumns, wide: isWideLayout), spacing: Theme.spacingM) {
             ForEach(items.gridSlots) { slot in
                 NavigationLink(value: slot.item) {
                     PosterCard(item: slot.item, showRemarks: true, titleFont: .footnote, landscape: posterLandscape)
@@ -313,7 +284,6 @@ struct HomeView: View {
                 }
             }
         }
-        .id("\(siteId ?? "")-\(posterLandscape)-\(columnCount)")
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
     }

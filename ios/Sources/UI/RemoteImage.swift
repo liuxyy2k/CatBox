@@ -17,7 +17,6 @@
 //  直连失败再回退到代理，行为不变但省掉了源的负担。
 //
 
-import ImageIO
 import SwiftUI
 import UIKit
 
@@ -36,8 +35,7 @@ final class RemoteImageLoader {
         configuration.requestCachePolicy = .returnCacheDataElseLoad
         configuration.timeoutIntervalForRequest = 20
         session = URLSession(configuration: configuration)
-        memory.countLimit = 180
-        memory.totalCostLimit = 32 * 1024 * 1024
+        memory.countLimit = 400
     }
 
     func cached(_ urlString: String) -> UIImage? {
@@ -62,10 +60,7 @@ final class RemoteImageLoader {
         lock.lock()
         inFlight[urlString] = nil
         lock.unlock()
-        if let image {
-            let cost = Int(image.size.width * image.scale * image.size.height * image.scale * 4)
-            memory.setObject(image, forKey: urlString as NSString, cost: cost)
-        }
+        if let image { memory.setObject(image, forKey: urlString as NSString) }
         return image
     }
 
@@ -117,7 +112,7 @@ final class RemoteImageLoader {
         do {
             let (data, response) = try await session.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            guard (200..<300).contains(code), let image = thumbnail(data) else {
+            guard (200..<300).contains(code), let image = UIImage(data: data) else {
                 CatyLog.shared.debug("ui", "封面加载失败 HTTP \(code)：\(url.host ?? "")")
                 return nil
             }
@@ -126,20 +121,6 @@ final class RemoteImageLoader {
             CatyLog.shared.debug("ui", "封面加载异常：\(error.localizedDescription)")
             return nil
         }
-    }
-
-    /// 封面只需要格子那么大。按原图解码的话，一屏几十张 4K 图会把内存打满，系统直接杀掉 App。
-    private static func thumbnail(_ data: Data) -> UIImage? {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: 480,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: cgImage)
     }
 }
 
@@ -159,8 +140,6 @@ struct RemoteImage: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
             } else if failed {
                 textFallback
             } else {

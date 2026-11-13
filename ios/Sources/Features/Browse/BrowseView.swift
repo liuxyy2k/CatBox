@@ -36,14 +36,7 @@ struct BrowseView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var posterLandscape: Bool { library.settings.posterLandscape }
-    private var columnCount: Int {
-        Theme.categoryColumnCount(gridColumns: library.settings.gridColumns,
-                                   wide: sizeClass == .regular,
-                                   landscape: posterLandscape)
-    }
-    private var posterAspect: CGFloat {
-        posterLandscape ? Theme.posterLandscapeAspect : Theme.posterAspect
-    }
+    private var wideColumnCount: Int { library.settings.gridColumns + (sizeClass == .regular ? 2 : 0) }
     private var posterLandscapeBinding: Binding<Bool> {
         Binding(get: { library.settings.posterLandscape },
                 set: { library.settings.posterLandscape = $0 })
@@ -57,7 +50,6 @@ struct BrowseView: View {
                     .padding(.top, Theme.spacingS)
             }
         }
-        .background(Theme.canvas.ignoresSafeArea())
         .navigationTitle(title ?? site.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -77,7 +69,8 @@ struct BrowseView: View {
     @ViewBuilder
     private var pageBody: some View {
         if loading && items.isEmpty {
-            PosterSkeletonGrid(columns: columnCount, rows: 2, aspect: posterAspect)
+            PosterSkeletonGrid(columns: wideColumnCount, rows: 2,
+                                aspect: posterLandscape ? Theme.posterLandscapeAspect : Theme.posterAspect)
         } else if items.isEmpty {
             if let errorText {
                 Text(errorText)
@@ -108,12 +101,8 @@ struct BrowseView: View {
             if !categories.isEmpty { categoryRow }
             ForEach(filters) { group in filterRow(group) }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, Theme.spacingS)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.canvas)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-        }
     }
 
     private var categoryRow: some View {
@@ -126,7 +115,7 @@ struct BrowseView: View {
                         selected = [:]
                         Task { await reload() }
                     } label: {
-                        ChipLabel(text: category.name, selected: category.id == tid, compact: true, glass: true)
+                            ChipLabel(text: category.name, selected: category.id == tid, compact: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -152,8 +141,7 @@ struct BrowseView: View {
                     } label: {
                         ChipLabel(text: option.name,
                                   selected: selected[group.id] == option.value,
-                                  compact: true,
-                                  glass: true)
+                                  compact: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -165,12 +153,12 @@ struct BrowseView: View {
     // MARK: - 海报墙
 
     private var posterGrid: some View {
-        LazyVGrid(columns: Theme.columns(columnCount), spacing: Theme.spacingL) {
+        LazyVGrid(columns: Theme.posterColumns(library.settings.gridColumns, wide: sizeClass == .regular),
+                  spacing: Theme.spacingM) {
             ForEach(items.gridSlots) { slot in
                 posterLink(slot)
             }
         }
-        .id("\(site.id)-\(tid ?? "")-\(posterLandscape)-\(columnCount)")
         .padding(.horizontal, Theme.padding)
         .padding(.bottom, Theme.padding)
     }
